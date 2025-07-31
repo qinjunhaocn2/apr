@@ -31,7 +31,7 @@ jobs:
 
       - name: Create random file in apr/
         run: |
-          FILENAME="apr/random_$(date +%s).txt"
+          FILENAME="apr/prs/random_$(date +%s).txt"
           echo "This is an auto-generated file at $(date)" > "$FILENAME"
           git add "$FILENAME"
 
