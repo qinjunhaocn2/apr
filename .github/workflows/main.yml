@@ -1,0 +1,77 @@
+name: Auto Create PR to Upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 8 * * *'
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout your fork
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.MY_GITHUB_TOKEN }}
+          repository: qinjunhaocn/apr
+          ref: main
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create new branch
+        run: |
+          BRANCH_NAME="auto-pr-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH_NAME"
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Create random file in apr/
+        run: |
+          FILENAME="apr/random_$(date +%s).txt"
+          echo "This is an auto-generated file at $(date)" > "$FILENAME"
+          git add "$FILENAME"
+
+      - name: Commit changes
+        run: |
+          git commit -m "Add random file via GitHub Actions"
+
+      - name: Push branch to your fork
+        run: |
+          git push origin "$BRANCH_NAME"
+
+      - name: Clone upstream repo into temp dir
+        run: |
+          git clone https://github.com/qinjunhaocn2/apr.git upstream-repo
+          cd upstream-repo
+          git remote add fork https://x-access-token:${{ secrets.MY_GITHUB_TOKEN }}@github.com/qinjunhaocn/apr.git
+          git fetch fork "$BRANCH_NAME"
+
+      - name: Cherry-pick commit into upstream repo (without .github)
+        run: |
+          cd upstream-repo
+          git checkout -b "$BRANCH_NAME"
+          git cherry-pick fork/"$BRANCH_NAME" --strategy=recursive -X theirs
+          rm -rf .github  # 确保不推送 .github
+          git add .
+          git commit --amend --no-edit
+
+      - name: Push to upstream repo
+        run: |
+          cd upstream-repo
+          git push origin "$BRANCH_NAME"
+
+      - name: Create Pull Request to upstream
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.MY_GITHUB_TOKEN }}
+          path: upstream-repo
+          branch: ${{ env.BRANCH_NAME }}
+          base: main
+          title: "Auto PR: Add random file"
+          body: |
+            This PR was automatically created by GitHub Actions.
+            It adds a random file to the `apr/` directory.
