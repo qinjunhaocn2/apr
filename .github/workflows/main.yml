@@ -3,7 +3,7 @@ name: Auto PR with Random File
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 8 * * *'   # 每天 8:00 UTC 触发一次（可选）
+    - cron: '0 8 * * *'
 
 jobs:
   create-pr:
@@ -19,20 +19,19 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      # 2. 配置 Git 用户信息
+      # 2. 配置 Git
       - name: Configure Git
         run: |
           git config --global user.name "qinjunhaocn"
           git config --global user.email "avf_j7b6@163.com"
-
-      # 3. 新建分支
-      - name: Create new branch
+      # 3. 创建并切换到新分支
+      - name: Create branch
         run: |
           BRANCH_NAME="auto-pr-$(date +%Y%m%d-%H%M%S)"
           git checkout -b "$BRANCH_NAME"
           echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
 
-      # 4. 在 prs/ 目录生成随机文件
+      # 4. 写入随机文件
       - name: Create random file in prs/
         run: |
           FILENAME="prs/random_$(date +%s).txt"
@@ -40,7 +39,7 @@ jobs:
           git add "$FILENAME"
 
       # 5. 提交并推送到你的 fork
-      - name: Commit & push
+      - name: Commit & push to fork
         run: |
           git commit -m "Add random file via GitHub Actions"
           git push origin "$BRANCH_NAME"
@@ -53,8 +52,10 @@ jobs:
           git remote add fork https://x-access-token:${{ secrets.MY_GITHUB_TOKEN }}@github.com/qinjunhaocn/apr.git
           git fetch fork "$BRANCH_NAME"
 
-      # 7. 在上游仓库 cherry-pick 并删除 .github
-      - name: Cherry-pick & remove .github
+      # 7. 在上游目录里 cherry-pick、删 .github、推送
+      - name: Push to upstream and create PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
         run: |
           cd upstream-repo
           git checkout -b "$BRANCH_NAME" origin/main
@@ -62,17 +63,13 @@ jobs:
           rm -rf .github
           git add -A
           git commit --amend --no-edit --allow-empty
+          git remote set-url origin https://x-access-token:${{ secrets.MY_GITHUB_TOKEN }}@github.com/qinjunhaocn2/apr.git
+          git push -u origin "$BRANCH_NAME"
 
-      # 8. 推送到上游并创建 PR
-      - name: Push to upstream & open PR
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.MY_GITHUB_TOKEN }}
-          path: upstream-repo
-          branch: ${{ env.BRANCH_NAME }}
-          base: main
-          title: "Auto PR: Add random file"
-          body: |
-            This PR was automatically created by GitHub Actions.
-            It adds a random file to the `prs/` directory.
-          draft: false
+          # 用 gh CLI 创建 PR
+          gh pr create \
+            --title  "Auto PR: Add random file" \
+            --body   "This PR was automatically created by GitHub Actions. It adds a random file to the \`prs/\` directory." \
+            --base   main \
+            --head   "$BRANCH_NAME" \
+            --repo   qinjunhaocn2/apr
