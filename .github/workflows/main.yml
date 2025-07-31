@@ -1,15 +1,16 @@
-name: Auto Create PR to Upstream
+name: Auto PR with Random File
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 8 * * *'
+    - cron: '0 8 * * *'   # 每天 8:00 UTC 触发一次（可选）
 
 jobs:
   create-pr:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. 克隆你的 fork
       - name: Checkout your fork
         uses: actions/checkout@v4
         with:
@@ -18,53 +19,52 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      # 2. 配置 Git 用户信息
       - name: Configure Git
         run: |
           git config --global user.name "qinjunhaocn"
           git config --global user.email "avf_j7b6@163.com"
 
+      # 3. 新建分支
       - name: Create new branch
         run: |
           BRANCH_NAME="auto-pr-$(date +%Y%m%d-%H%M%S)"
           git checkout -b "$BRANCH_NAME"
           echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
 
-      - name: Create random file in apr/
+      # 4. 在 prs/ 目录生成随机文件
+      - name: Create random file in prs/
         run: |
           FILENAME="prs/random_$(date +%s).txt"
-          echo "This is an auto-generated file at $(date)" > "$FILENAME"
+          echo "Auto-generated at $(date)" > "$FILENAME"
           git add "$FILENAME"
 
-      - name: Commit changes
+      # 5. 提交并推送到你的 fork
+      - name: Commit & push
         run: |
           git commit -m "Add random file via GitHub Actions"
-
-      - name: Push branch to your fork
-        run: |
           git push origin "$BRANCH_NAME"
 
-      - name: Clone upstream repo into temp dir
+      # 6. 克隆上游仓库到临时目录
+      - name: Clone upstream repo
         run: |
           git clone https://github.com/qinjunhaocn2/apr.git upstream-repo
           cd upstream-repo
           git remote add fork https://x-access-token:${{ secrets.MY_GITHUB_TOKEN }}@github.com/qinjunhaocn/apr.git
           git fetch fork "$BRANCH_NAME"
 
-      - name: Cherry-pick commit into upstream repo (without .github)
+      # 7. 在上游仓库 cherry-pick 并删除 .github
+      - name: Cherry-pick & remove .github
         run: |
           cd upstream-repo
-          git checkout -b "$BRANCH_NAME"
+          git checkout -b "$BRANCH_NAME" origin/main
           git cherry-pick fork/"$BRANCH_NAME" --strategy=recursive -X theirs
-          rm -rf .github  # 确保不推送 .github
-          git add .
-          git commit --amend --no-edit
+          rm -rf .github
+          git add -A
+          git commit --amend --no-edit --allow-empty
 
-      - name: Push to upstream repo
-        run: |
-          cd upstream-repo
-          git push origin "$BRANCH_NAME"
-
-      - name: Create Pull Request to upstream
+      # 8. 推送到上游并创建 PR
+      - name: Push to upstream & open PR
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.MY_GITHUB_TOKEN }}
@@ -74,4 +74,5 @@ jobs:
           title: "Auto PR: Add random file"
           body: |
             This PR was automatically created by GitHub Actions.
-            It adds a random file to the `apr/` directory.
+            It adds a random file to the `prs/` directory.
+          draft: false
