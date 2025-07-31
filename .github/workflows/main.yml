@@ -1,0 +1,58 @@
+name: Auto PR with Random File
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 8 * * *'
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 克隆自己的 fork
+      - name: Checkout your fork
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.MY_GITHUB_TOKEN }}
+          repository: qinjunhaocn/apr
+          ref: main
+          fetch-depth: 0
+
+      # 2. 配置 Git
+      - name: Configure Git
+        run: |
+          git config --global user.name "qinjunhaocn"
+          git config --global user.email "avf_j7b6@163.com"
+
+      # 3. 创建并切换到新分支
+      - name: Create branch
+        run: |
+          BRANCH_NAME="auto-pr-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH_NAME"
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+
+      # 4. 在 prs/ 目录生成随机文件
+      - name: Create random file in prs/
+        run: |
+          FILENAME="prs/random_$(date +%s).txt"
+          echo "Auto-generated at $(date)" > "$FILENAME"
+          git add "$FILENAME"
+
+      # 5. 提交并推送到自己的 fork
+      - name: Commit & push to fork
+        run: |
+          git commit -m "Add random file via GitHub Actions"
+          git push origin "$BRANCH_NAME"
+
+      # 6. 向上游仓库发 Pull Request
+      - name: Create Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --title  "Auto PR: Add random file" \
+            --body   "This PR was automatically created by GitHub Actions. It adds a random file to the \`prs/\` directory." \
+            --base   main \
+            --head   qinjunhaocn:${{ env.BRANCH_NAME }} \
+            --repo   qinjunhaocn2/apr
